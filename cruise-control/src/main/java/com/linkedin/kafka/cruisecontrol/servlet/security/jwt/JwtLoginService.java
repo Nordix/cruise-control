@@ -4,8 +4,7 @@
 
 package com.linkedin.kafka.cruisecontrol.servlet.security.jwt;
 
-import com.linkedin.kafka.cruisecontrol.servlet.security.RoleProvider;
-import com.linkedin.kafka.cruisecontrol.servlet.security.UserStoreRoleProvider;
+import com.linkedin.kafka.cruisecontrol.servlet.ExposedPropertyUserStore;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSObject;
 import com.nimbusds.jose.JWSVerifier;
@@ -19,7 +18,6 @@ import org.eclipse.jetty.security.UserIdentity;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Session;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
-import org.eclipse.jetty.util.component.LifeCycle;
 import javax.security.auth.Subject;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -41,37 +39,34 @@ import java.util.function.Function;
 import static com.linkedin.kafka.cruisecontrol.servlet.security.jwt.JwtAuthenticator.JWT_LOGGER;
 
 /**
- * <p>This class validates a JWT token. The token must be cryptographically encrypted, and it uses an RSA public key for
+ * <p>This class validates a JWT token. The token must be cryptographically encrypted and it uses an RSA public key for
  * validation that is expected to be stored in a PEM formatted file.</p>
- * <p>This class implements {@link AbstractLifeCycle} which means it is a managed bean, jetty will manage its lifecycle.
- * It's {@link RoleProvider} can also be an {@link AbstractLifeCycle} in which case it delegates to
- * this class, so opening and closing connections should be done by implementing the {@link AbstractLifeCycle} interface's
- * {@link #doStart()} and {@link #doStop()} methods respectively. For a simple example see
- * {@link UserStoreRoleProvider}.</p>
- * <p>The login service also validates expiration time of the token, and it expects the token to contain the expiration
+ * <p>This class implements {@link AbstractLifeCycle} which means it is a managed bean, its lifecycle will be managed
+ * by Jetty.</p>
+ * <p>The login service also validates expiration time of the token and it expects the token to contain the expiration
  * in Unix epoch time format in UTC.</p>
  */
 public class JwtLoginService extends AbstractLifeCycle implements LoginService {
 
   public static final String X_509_CERT_TYPE = "X.509";
-  private final RoleProvider _roleProvider;
+  private final ExposedPropertyUserStore _userStore;
   private IdentityService _identityService;
   private final RSAPublicKey _publicKey;
   private final List<String> _audiences;
   private Clock _clock;
 
-  public JwtLoginService(RoleProvider roleProvider, String publicKeyLocation, List<String> audiences)
+  public JwtLoginService(ExposedPropertyUserStore userStore, String publicKeyLocation, List<String> audiences)
       throws IOException, CertificateException {
-    this(roleProvider, readPublicKey(publicKeyLocation), audiences);
+    this(userStore, readPublicKey(publicKeyLocation), audiences);
   }
 
-  public JwtLoginService(RoleProvider roleProvider, RSAPublicKey publicKey, List<String> audiences) {
-    this(roleProvider, publicKey, audiences, Clock.systemUTC());
+  public JwtLoginService(ExposedPropertyUserStore userStore, RSAPublicKey publicKey, List<String> audiences) {
+    this(userStore, publicKey, audiences, Clock.systemUTC());
   }
 
-  public JwtLoginService(RoleProvider roleProvider, RSAPublicKey publicKey, List<String> audiences, Clock clock) {
+  public JwtLoginService(ExposedPropertyUserStore userStore, RSAPublicKey publicKey, List<String> audiences, Clock clock) {
+    _userStore = userStore;
     _identityService = new DefaultIdentityService();
-    _roleProvider = roleProvider;
     _publicKey = publicKey;
     _audiences = audiences;
     _clock = clock;
@@ -80,16 +75,12 @@ public class JwtLoginService extends AbstractLifeCycle implements LoginService {
   @Override
   protected void doStart() throws Exception {
     super.doStart();
-    if (_roleProvider instanceof LifeCycle) {
-      ((LifeCycle) _roleProvider).start();
-    }
+    _userStore.start();
   }
 
   @Override
   protected void doStop() throws Exception {
-    if (_roleProvider instanceof LifeCycle) {
-      ((LifeCycle) _roleProvider).stop();
-    }
+    _userStore.stop();
     super.doStop();
   }
 
@@ -114,15 +105,17 @@ public class JwtLoginService extends AbstractLifeCycle implements LoginService {
       JWT_LOGGER.warn(String.format("%s: Couldn't parse a JWT token", username), e);
       return null;
     }
-    if (!valid) {
+    if (valid) {
+      String serializedToken = (String) request.getAttribute(JwtAuthenticator.JWT_TOKEN_REQUEST_ATTRIBUTE);
+      UserIdentity rolesDelegate = _userStore.getUserIdentity(username);
+      if (rolesDelegate == null) {
+        return null;
+      } else {
+        return getUserIdentity(jwtToken, claimsSet, serializedToken, username, rolesDelegate);
+      }
+    } else {
       return null;
     }
-    String[] roles = _roleProvider.rolesFor(request, username);
-    if (roles == null) {
-     return null;
-    }
-    String serializedToken = (String) request.getAttribute(JwtAuthenticator.JWT_TOKEN_REQUEST_ATTRIBUTE);
-    return getUserIdentity(jwtToken, claimsSet, serializedToken, username, roles);
   }
 
   @Override
@@ -208,13 +201,13 @@ public class JwtLoginService extends AbstractLifeCycle implements LoginService {
     return (RSAPublicKey) cer.getPublicKey();
   }
 
-  private UserIdentity getUserIdentity(SignedJWT jwtToken, JWTClaimsSet claimsSet, String serializedToken,
-                                       String username, String[] roles) {
+  private static UserIdentity getUserIdentity(SignedJWT jwtToken, JWTClaimsSet claimsSet, String serializedToken,
+                                              String username, UserIdentity rolesDelegate) {
     JwtUserPrincipal principal = new JwtUserPrincipal(username, serializedToken);
     Set<Object> privCreds = new HashSet<>();
     privCreds.add(jwtToken);
     privCreds.add(claimsSet);
     Subject subject = new Subject(true, Collections.singleton(principal), Collections.emptySet(), privCreds);
-    return new JwtUserIdentity(subject, principal, roles);
+    return new JwtUserIdentity(subject, principal, rolesDelegate);
   }
 }
