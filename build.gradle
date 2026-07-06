@@ -510,9 +510,9 @@ project(':cruise-control-metrics-reporter') {
 
 artifactoryPublish.skip = true
 artifactory {
-  contextUrl = 'https://linkedin.jfrog.io/linkedin'
+  contextUrl = 'https://artifactory.nordix.org/artifactory'
   publish {
-    repoKey = 'cruise-control'
+    repoKey = 'allies-mvn'
     username = System.getenv('ARTIFACTORY_USER')
     password = System.getenv('ARTIFACTORY_KEY')
 

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['main']
+    branches: ['main', '2.5.*']
   pull_request:
     types: [ opened, synchronize, reopened ]
 
@@ -30,6 +30,10 @@ jobs:
           cache: gradle
       # see: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
       - uses: gradle/actions/setup-gradle@v4 # v4.0.0
+      - name: gradle javadoc
+        run: ./gradlew --no-daemon clean javadoc
+      - name: gradle static analysis
+        run: ./gradlew --max-workers=1 --no-daemon analyze
       - name: gradle build
         run: ./gradlew --no-daemon -PmaxParallelForks=1 build
 
