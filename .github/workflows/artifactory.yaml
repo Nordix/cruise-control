@@ -9,9 +9,43 @@ on:
   #  types: [published]
 
 jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # so gradle doesn't fail traversing the history
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: microsoft
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v4 # v4.0.0
+      - name: gradle build
+        run: ./gradlew --no-daemon -PmaxParallelForks=1 build
+
+  integration-test:
+    name: integration-test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # so gradle doesn't fail traversing the history
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: microsoft
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v4 # v4.0.0
+      - name: gradle integration test
+        run: ./gradlew --no-daemon -PmaxParallelForks=1 clean integrationTest
+
   publish:
     # if: startsWith(github.event.ref, 'release/')
     name: publish
+    needs: integration-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
