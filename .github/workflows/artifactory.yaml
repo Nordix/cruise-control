@@ -2,24 +2,64 @@ name: Artifactory
 
 on:
   workflow_dispatch: # manual trigger
+  push:
+    tags:
+      - '2.5.146-est-*'
   #release:
   #  types: [published]
 
 jobs:
-  publish:
-    # if: startsWith(github.event.ref, 'release/')
-    name: publish
+  build:
+    name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0 # so gradle doesn't fail traversing the history
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
           java-version: 17
           distribution: microsoft
           cache: gradle
-      - uses: gradle/actions/setup-gradle@v4 # v4.0.0
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: gradle build
+        run: ./gradlew --no-daemon -PmaxParallelForks=1 build
+
+  integration-test:
+    name: integration-test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0 # so gradle doesn't fail traversing the history
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          java-version: 17
+          distribution: microsoft
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: gradle integration test
+        run: ./gradlew --no-daemon -PmaxParallelForks=1 clean integrationTest
+
+  publish:
+    # if: startsWith(github.event.ref, 'release/')
+    name: publish
+    needs: integration-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0 # so gradle doesn't fail traversing the history
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          java-version: 17
+          distribution: microsoft
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
       - name: publish
+        env:
+          ARTIFACTORY_USER: ${{ secrets.ARTIFACTORY_USER }}
+          ARTIFACTORY_KEY: ${{ secrets.ARTIFACTORY_KEY }}
         run: |
           ./gradlew :artifactoryPublish :cruise-control:artifactoryPublish :cruise-control-core:artifactoryPublish :cruise-control-metrics-reporter:artifactoryPublish
