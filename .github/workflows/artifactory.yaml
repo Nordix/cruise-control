@@ -1,7 +1,6 @@
 name: Artifactory
 
 on:
-  workflow_dispatch: # manual trigger
   push:
     tags:
       - '2.5.146-est-*'
