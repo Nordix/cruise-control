@@ -1,9 +1,6 @@
 name: Generate VEX Documents
 
 on:
-  push:
-    branches:
-      - 2.5.146-est
   release:
     types: [published]
   workflow_dispatch:
