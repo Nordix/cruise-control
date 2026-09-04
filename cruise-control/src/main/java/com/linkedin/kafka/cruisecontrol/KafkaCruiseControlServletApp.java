@@ -69,12 +69,8 @@ public class KafkaCruiseControlServletApp extends KafkaCruiseControlApp {
             maybeConfigureTlsProtocolsAndCiphers(sslServerContextFactory);
 
             Boolean stsEnabled = _config.getBoolean(WebServerConfig.WEBSERVER_SSL_STS_ENABLED);
-            if (stsEnabled != null && stsEnabled) {
-                HttpConnectionFactory httpConnectionFactory = configureConnectionFactoryForHsts();
-                serverConnector = new ServerConnector(_server, sslServerContextFactory, httpConnectionFactory);
-            } else {
-                serverConnector = new ServerConnector(_server, sslServerContextFactory);
-            }
+            HttpConnectionFactory httpConnectionFactory = configureHttpsConnectionFactory(stsEnabled != null && stsEnabled);
+            serverConnector = new ServerConnector(_server, sslServerContextFactory, httpConnectionFactory);
         } else {
             serverConnector = new ServerConnector(_server);
         }
@@ -83,18 +79,27 @@ public class KafkaCruiseControlServletApp extends KafkaCruiseControlApp {
         return serverConnector;
     }
 
-    private HttpConnectionFactory configureConnectionFactoryForHsts() {
-        Long stsMaxAge = _config.getLong(WebServerConfig.WEBSERVER_SSL_STS_MAX_AGE);
-        Boolean stsIncludeSubDomains = _config.getBoolean(WebServerConfig.WEBSERVER_SSL_STS_INCLUDE_SUBDOMAINS);
+    private HttpConnectionFactory configureHttpsConnectionFactory(boolean stsEnabled) {
         Integer maxHeaderSize = _config.getInt(WebServerConfig.WEBSERVER_HTTP_MAX_HEADER_SIZE);
 
         SecureRequestCustomizer src = new SecureRequestCustomizer();
-        src.setStsMaxAge(stsMaxAge);
-        src.setStsIncludeSubDomains(stsIncludeSubDomains);
+        // Jetty's SecureRequestCustomizer enables SNI host checking by default, which rejects a request with HTTP 400
+        // ("Invalid SNI") whenever the request Host does not match the server certificate. Cruise Control is commonly
+        // fronted by a TLS-terminating/re-originating proxy (e.g. a Kubernetes ingress) where the forwarded Host and
+        // the backend certificate legitimately differ, so disable the check to avoid spurious 400s that would
+        // otherwise mask the real 200/401/403 responses. This must be applied to every HTTPS connector, not only when
+        // HSTS is enabled, since Jetty installs a SecureRequestCustomizer (with the check on) by default.
+        src.setSniHostCheck(false);
+        if (stsEnabled) {
+            src.setStsMaxAge(_config.getLong(WebServerConfig.WEBSERVER_SSL_STS_MAX_AGE));
+            src.setStsIncludeSubDomains(_config.getBoolean(WebServerConfig.WEBSERVER_SSL_STS_INCLUDE_SUBDOMAINS));
+        }
 
         HttpConfiguration httpsConfig = new HttpConfiguration();
         httpsConfig.addCustomizer(src);
-        httpsConfig.setRequestHeaderSize(maxHeaderSize);
+        if (maxHeaderSize != null) {
+            httpsConfig.setRequestHeaderSize(maxHeaderSize);
+        }
         return new HttpConnectionFactory(httpsConfig);
     }
 

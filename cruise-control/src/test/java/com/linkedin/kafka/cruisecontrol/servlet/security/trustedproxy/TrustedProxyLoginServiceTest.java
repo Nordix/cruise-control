@@ -8,6 +8,7 @@ import com.linkedin.kafka.cruisecontrol.servlet.security.DefaultRoleSecurityProv
 import com.linkedin.kafka.cruisecontrol.servlet.security.SecurityUtils;
 import com.linkedin.kafka.cruisecontrol.servlet.security.spnego.SpnegoLoginService;
 import org.eclipse.jetty.http.HttpURI;
+import org.eclipse.jetty.http.UriCompliance;
 import org.eclipse.jetty.security.IdentityService;
 import org.eclipse.jetty.security.RoleDelegateUserIdentity;
 import org.eclipse.jetty.security.SPNEGOUserPrincipal;
@@ -66,6 +67,7 @@ public class TrustedProxyLoginServiceTest {
     expect(mockRequest.getConnectionMetaData()).andReturn(mockConnectionMetaData).anyTimes();
     expect(mockConnectionMetaData.getHttpConfiguration()).andReturn(mockConfig).anyTimes();
     expect(mockConfig.getFormEncodedMethods()).andReturn(Set.of(""));
+    expect(mockConfig.getUriCompliance()).andReturn(UriCompliance.DEFAULT).anyTimes();
     expect(mockRequest.getMethod()).andReturn("GET").anyTimes();
     expect(mockRequest.getAttribute(anyString())).andReturn(null).anyTimes();
     IdentityService mockIdentityService = mock(IdentityService.class);
@@ -138,6 +140,7 @@ public class TrustedProxyLoginServiceTest {
     expect(mockRequest.getConnectionMetaData()).andReturn(mockConnectionMetaData).anyTimes();
     expect(mockConnectionMetaData.getHttpConfiguration()).andReturn(mockConfig).anyTimes();
     expect(mockConfig.getFormEncodedMethods()).andReturn(Set.of(""));
+    expect(mockConfig.getUriCompliance()).andReturn(UriCompliance.DEFAULT).anyTimes();
     expect(mockRequest.getMethod()).andReturn("GET").anyTimes();
     expect(mockRequest.getAttribute(anyString())).andReturn(null).anyTimes();
     IdentityService mockIdentityService = mock(IdentityService.class);
@@ -208,6 +211,7 @@ public class TrustedProxyLoginServiceTest {
     expect(mockRequest.getConnectionMetaData()).andReturn(mockConnectionMetaData).anyTimes();
     expect(mockConnectionMetaData.getHttpConfiguration()).andReturn(mockConfig).anyTimes();
     expect(mockConfig.getFormEncodedMethods()).andReturn(Set.of(""));
+    expect(mockConfig.getUriCompliance()).andReturn(UriCompliance.DEFAULT).anyTimes();
     expect(mockRequest.getMethod()).andReturn("GET").anyTimes();
     expect(mockRequest.getAttribute(anyString())).andReturn(null).anyTimes();
     IdentityService mockIdentityService = mock(IdentityService.class);
