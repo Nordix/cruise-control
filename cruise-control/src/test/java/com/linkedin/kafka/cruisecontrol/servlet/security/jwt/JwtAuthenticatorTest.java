@@ -143,6 +143,7 @@ public class JwtAuthenticatorTest {
     expect(configuration.getIdentityService()).andReturn(new DefaultIdentityService());
     expect(configuration.isSessionRenewedOnAuthentication()).andReturn(true);
     expect(configuration.getSessionMaxInactiveIntervalOnAuthentication()).andReturn(0);
+    expect(configuration.isPersistAuthenticationCredentials()).andReturn(false).anyTimes();
 
     Request request = niceMock(Request.class);
     HttpFields headers = mock(HttpFields.class);
@@ -182,6 +183,7 @@ public class JwtAuthenticatorTest {
     expect(configuration.getIdentityService()).andReturn(new DefaultIdentityService());
     expect(configuration.isSessionRenewedOnAuthentication()).andReturn(true);
     expect(configuration.getSessionMaxInactiveIntervalOnAuthentication()).andReturn(0);
+    expect(configuration.isPersistAuthenticationCredentials()).andReturn(false).anyTimes();
 
     Request request = niceMock(Request.class);
     HttpFields headers = mock(HttpFields.class);
@@ -219,6 +221,7 @@ public class JwtAuthenticatorTest {
     expect(configuration.getIdentityService()).andReturn(new DefaultIdentityService());
     expect(configuration.isSessionRenewedOnAuthentication()).andReturn(true);
     expect(configuration.getSessionMaxInactiveIntervalOnAuthentication()).andReturn(0);
+    expect(configuration.isPersistAuthenticationCredentials()).andReturn(false).anyTimes();
 
     Request request = niceMock(Request.class);
     HttpFields headers = mock(HttpFields.class);

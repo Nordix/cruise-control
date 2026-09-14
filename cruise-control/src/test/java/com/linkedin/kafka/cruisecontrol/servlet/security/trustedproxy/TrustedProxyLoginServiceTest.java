@@ -19,9 +19,11 @@ import org.eclipse.jetty.server.Context;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.Request;
 import org.junit.Test;
+import org.powermock.reflect.Whitebox;
 import javax.security.auth.Subject;
 import java.util.Collections;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DO_AS;
 import static org.easymock.EasyMock.anyObject;
@@ -41,7 +43,9 @@ public class TrustedProxyLoginServiceTest {
   public static final String TEST_SERVICE_USER = "testServiceUser";
   public static final String ENCODED_TOKEN = "encoded_token";
   public static final String TEST_USER = "testUser";
+  private static final String IP_FILTER = "192\\.168\\.\\d{1,3}\\.\\d{1,3}";
   private final UserStore _adminUserStore = new UserStore();
+  private final UserStore _serviceUserStore = new UserStore();
 
   private final SpnegoLoginService _mockSpnegoLoginService = mock(SpnegoLoginService.class);
   private final SpnegoLoginService _mockFallbackLoginService = mock(SpnegoLoginService.class);
@@ -76,7 +80,7 @@ public class TrustedProxyLoginServiceTest {
     replay(_mockSpnegoLoginService, mockRequest, mockContext, mockConnectionMetaData, mockConfig, mockIdentityService);
 
     TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
-        _adminUserStore, false);
+        _adminUserStore, _serviceUserStore, false);
     UserIdentity doAsIdentity = trustedProxyLoginService.login(null, ENCODED_TOKEN, mockRequest, null);
     assertNotNull(doAsIdentity);
     assertNotNull(doAsIdentity.getUserPrincipal());
@@ -111,7 +115,7 @@ public class TrustedProxyLoginServiceTest {
     replay(_mockSpnegoLoginService, mockRequest, mockContext, mockConnectionMetaData, mockConfig);
 
     TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
-            _adminUserStore, false);
+            _adminUserStore, _serviceUserStore, false);
     UserIdentity doAsIdentity = trustedProxyLoginService.login(null, ENCODED_TOKEN, mockRequest, null);
     assertNotNull(doAsIdentity);
     assertNotNull(doAsIdentity.getUserPrincipal());
@@ -149,7 +153,7 @@ public class TrustedProxyLoginServiceTest {
     replay(_mockSpnegoLoginService, mockRequest, mockContext, mockConnectionMetaData, mockConfig, mockIdentityService);
 
     TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
-            _adminUserStore, false);
+            _adminUserStore, _serviceUserStore, false);
     UserIdentity doAsIdentity = trustedProxyLoginService.login(null, ENCODED_TOKEN, mockRequest, null);
     assertNotNull(doAsIdentity);
     assertFalse(((RoleDelegateUserIdentity) doAsIdentity).isEstablished());
@@ -181,7 +185,7 @@ public class TrustedProxyLoginServiceTest {
     replay(_mockSpnegoLoginService, _mockFallbackLoginService, mockRequest, mockContext, mockConnectionMetaData, mockConfig);
 
     TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
-            _adminUserStore, true);
+            _adminUserStore, _serviceUserStore, true);
     UserIdentity doAsIdentity = trustedProxyLoginService.login(null, ENCODED_TOKEN, mockRequest, null);
     assertNotNull(doAsIdentity);
     assertNotNull(doAsIdentity.getUserPrincipal());
@@ -217,7 +221,7 @@ public class TrustedProxyLoginServiceTest {
     IdentityService mockIdentityService = mock(IdentityService.class);
     replay(_mockSpnegoLoginService, mockRequest, mockContext, mockConnectionMetaData, mockConfig, mockIdentityService);
     TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
-            _adminUserStore, false);
+            _adminUserStore, _serviceUserStore, false);
 
     UserIdentity doAsIdentity = trustedProxyLoginService.login(proxy, ENCODED_TOKEN, mockRequest, null);
 
@@ -255,7 +259,7 @@ public class TrustedProxyLoginServiceTest {
     expect(mockRequest.getAttribute(anyString())).andReturn(null).anyTimes();
     replay(_mockSpnegoLoginService, _mockFallbackLoginService, mockRequest, mockContext, mockConnectionMetaData, mockConfig);
     TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
-            _adminUserStore, true);
+            _adminUserStore, _serviceUserStore, true);
 
     UserIdentity doAsIdentity = trustedProxyLoginService.login(principal, ENCODED_TOKEN, mockRequest, null);
 
@@ -269,6 +273,105 @@ public class TrustedProxyLoginServiceTest {
 
   private void addTestUser(String testUser) {
     _adminUserStore.addUser(testUser, SecurityUtils.NO_CREDENTIAL, new String[] { DefaultRoleSecurityProvider.ADMIN });
+  }
+
+  @Test
+  public void testSuccessfulLoginWithIpFiltering() {
+    SPNEGOUserPrincipal servicePrincipal = new SPNEGOUserPrincipal(TEST_SERVICE_USER, ENCODED_TOKEN);
+    UserIdentity serviceDelegate = mock(UserIdentity.class);
+    Subject subject = new Subject(true, Collections.singleton(servicePrincipal), Collections.emptySet(), Collections.emptySet());
+    RoleDelegateUserIdentity result = new RoleDelegateUserIdentity(subject, servicePrincipal, serviceDelegate);
+    expect(_mockSpnegoLoginService.login(anyString(), anyObject(), anyObject(), anyObject())).andReturn(result);
+
+    addTestUser(TEST_USER);
+
+    Request mockRequest = mockRequestWithDoAs(TEST_USER, "192.168.0.1");
+    IdentityService mockIdentityService = mock(IdentityService.class);
+    expect(mockIdentityService.newUserIdentity(anyObject(), anyObject(), anyObject())).andReturn(serviceDelegate);
+    replay(_mockSpnegoLoginService, mockIdentityService);
+
+    TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
+        _adminUserStore, _serviceUserStore, false);
+    Whitebox.setInternalState(trustedProxyLoginService, "_identityService", mockIdentityService);
+    Whitebox.setInternalState(trustedProxyLoginService, "_trustedProxyIpPattern", Pattern.compile(IP_FILTER));
+
+    UserIdentity doAsIdentity = trustedProxyLoginService.login(null, ENCODED_TOKEN, mockRequest, null);
+    assertNotNull(doAsIdentity);
+    assertTrue(((RoleDelegateUserIdentity) doAsIdentity).isEstablished());
+    assertEquals(TEST_USER, doAsIdentity.getUserPrincipal().getName());
+  }
+
+  @Test
+  public void testUnsuccessfulLoginWithIpFiltering() {
+    SPNEGOUserPrincipal servicePrincipal = new SPNEGOUserPrincipal(TEST_SERVICE_USER, ENCODED_TOKEN);
+    UserIdentity serviceDelegate = mock(UserIdentity.class);
+    Subject subject = new Subject(true, Collections.singleton(servicePrincipal), Collections.emptySet(), Collections.emptySet());
+    RoleDelegateUserIdentity result = new RoleDelegateUserIdentity(subject, servicePrincipal, serviceDelegate);
+    expect(_mockSpnegoLoginService.login(anyString(), anyObject(), anyObject(), anyObject())).andReturn(result);
+
+    addTestUser(TEST_USER);
+
+    Request mockRequest = mockRequestWithDoAs(TEST_USER, "192.167.0.1");
+    IdentityService mockIdentityService = mock(IdentityService.class);
+    expect(mockIdentityService.newUserIdentity(anyObject(), anyObject(), anyObject())).andReturn(serviceDelegate);
+    replay(_mockSpnegoLoginService, mockIdentityService);
+
+    TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
+        _adminUserStore, _serviceUserStore, false);
+    Whitebox.setInternalState(trustedProxyLoginService, "_identityService", mockIdentityService);
+    Whitebox.setInternalState(trustedProxyLoginService, "_trustedProxyIpPattern", Pattern.compile(IP_FILTER));
+
+    UserIdentity doAsIdentity = trustedProxyLoginService.login(null, ENCODED_TOKEN, mockRequest, null);
+    assertNotNull(doAsIdentity);
+    // doAs lookup rejected by IP filter -> no delegate -> identity not established
+    assertFalse(((RoleDelegateUserIdentity) doAsIdentity).isEstablished());
+  }
+
+  @Test
+  public void testSuccessfulLoginWithoutIpFiltering() {
+    SPNEGOUserPrincipal servicePrincipal = new SPNEGOUserPrincipal(TEST_SERVICE_USER, ENCODED_TOKEN);
+    UserIdentity serviceDelegate = mock(UserIdentity.class);
+    Subject subject = new Subject(true, Collections.singleton(servicePrincipal), Collections.emptySet(), Collections.emptySet());
+    RoleDelegateUserIdentity result = new RoleDelegateUserIdentity(subject, servicePrincipal, serviceDelegate);
+    expect(_mockSpnegoLoginService.login(anyString(), anyObject(), anyObject(), anyObject())).andReturn(result);
+
+    addTestUser(TEST_USER);
+
+    Request mockRequest = mockRequestWithDoAs(TEST_USER, "10.0.0.1");
+    IdentityService mockIdentityService = mock(IdentityService.class);
+    expect(mockIdentityService.newUserIdentity(anyObject(), anyObject(), anyObject())).andReturn(serviceDelegate);
+    replay(_mockSpnegoLoginService, mockIdentityService);
+
+    TrustedProxyLoginService trustedProxyLoginService = new TrustedProxyLoginService(_mockSpnegoLoginService, _mockFallbackLoginService,
+        _adminUserStore, _serviceUserStore, false);
+    Whitebox.setInternalState(trustedProxyLoginService, "_identityService", mockIdentityService);
+    // no _trustedProxyIpPattern set -> null -> IP is not checked
+
+    UserIdentity doAsIdentity = trustedProxyLoginService.login(null, ENCODED_TOKEN, mockRequest, null);
+    assertNotNull(doAsIdentity);
+    assertTrue(((RoleDelegateUserIdentity) doAsIdentity).isEstablished());
+    assertEquals(TEST_USER, doAsIdentity.getUserPrincipal().getName());
+  }
+
+  private Request mockRequestWithDoAs(String doAsUser, String remoteAddr) {
+    Request mockRequest = mock(Request.class);
+    Context mockContext = mock(Context.class);
+    HttpURI uri = HttpURI.from("http://cruisecontrol.mycompany.com/somePath?" + DO_AS + "=" + doAsUser);
+    expect(mockRequest.getHttpURI()).andReturn(uri).anyTimes();
+    expect(mockRequest.getContext()).andReturn(mockContext).anyTimes();
+    expect(mockContext.getAttribute(anyString())).andReturn(null).anyTimes();
+    ConnectionMetaData mockConnectionMetaData = mock(ConnectionMetaData.class);
+    HttpConfiguration mockConfig = mock(HttpConfiguration.class);
+    expect(mockRequest.getConnectionMetaData()).andReturn(mockConnectionMetaData).anyTimes();
+    expect(mockConnectionMetaData.getHttpConfiguration()).andReturn(mockConfig).anyTimes();
+    expect(mockConfig.getFormEncodedMethods()).andReturn(Set.of(""));
+    expect(mockConfig.getUriCompliance()).andReturn(UriCompliance.DEFAULT).anyTimes();
+    expect(mockRequest.getMethod()).andReturn("GET").anyTimes();
+    expect(mockRequest.getAttribute(anyString())).andReturn(null).anyTimes();
+    expect(mockConnectionMetaData.getRemoteSocketAddress())
+        .andReturn(new java.net.InetSocketAddress(remoteAddr, 12345)).anyTimes();
+    replay(mockRequest, mockContext, mockConnectionMetaData, mockConfig);
+    return mockRequest;
   }
 
 }

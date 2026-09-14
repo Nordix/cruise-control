@@ -62,6 +62,6 @@ public class DummyLoginService implements LoginService {
         subject.getPrivateCredentials().add(NO_CREDENTIAL);
         subject.setReadOnly();
 
-        return _identityService.newUserIdentity(subject, userPrincipal, null);
+        return _identityService.newUserIdentity(subject, userPrincipal, new String[0]);
     }
 }

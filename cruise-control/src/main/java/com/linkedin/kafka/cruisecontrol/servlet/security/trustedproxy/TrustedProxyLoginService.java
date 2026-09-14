@@ -44,6 +44,7 @@ public class TrustedProxyLoginService extends ContainerLifeCycle implements Logi
   private static final Logger LOG = LoggerFactory.getLogger(TrustedProxyLoginService.class);
   public static final boolean READ_ONLY_SUBJECT = true;
   // authorizes the end user that is passed in via the doAs header
+  private final UserStore _serviceUserStore;
   private final UserStore _userStore;
   // use encapsulation instead of inheritance as it's easier to test
   private final SpnegoLoginService _delegateSpnegoLoginService;
@@ -63,8 +64,9 @@ public class TrustedProxyLoginService extends ContainerLifeCycle implements Logi
    */
   public TrustedProxyLoginService(String realm, String privilegesFilePath, List<String> trustedProxies,
                                   String trustedProxyIpPattern, boolean fallbackToSpnegoAllowed, List<String> principalToLocalRules) {
+    _serviceUserStore = new UserStore();
     _userStore = createUserStore(privilegesFilePath);
-    _delegateSpnegoLoginService = new SpnegoLoginService(realm, _userStore, principalToLocalRules);
+    _delegateSpnegoLoginService = new SpnegoLoginService(realm, _serviceUserStore, principalToLocalRules);
     _fallbackSpnegoLoginService = new SpnegoLoginService(realm, _userStore, principalToLocalRules);
     _fallbackToSpnegoAllowed = fallbackToSpnegoAllowed;
     _identityService = new DefaultIdentityService();
@@ -74,10 +76,11 @@ public class TrustedProxyLoginService extends ContainerLifeCycle implements Logi
   // visible for testing
   TrustedProxyLoginService(SpnegoLoginService delegateSpnegoLoginService,
                            SpnegoLoginService fallbackSpnegoLoginService,
-                           UserStore userStore, boolean fallbackToSpnegoAllowed) {
+                           UserStore userStore, UserStore serviceUserStore, boolean fallbackToSpnegoAllowed) {
     _delegateSpnegoLoginService = delegateSpnegoLoginService;
     _fallbackSpnegoLoginService = fallbackSpnegoLoginService;
     _userStore = userStore;
+    _serviceUserStore = serviceUserStore;
     _fallbackToSpnegoAllowed = fallbackToSpnegoAllowed;
     _identityService = new DefaultIdentityService();
   }
@@ -185,6 +188,7 @@ public class TrustedProxyLoginService extends ContainerLifeCycle implements Logi
   @Override
   protected void doStart() throws Exception {
     _userStore.start();
+    _serviceUserStore.start();
     _delegateSpnegoLoginService.start();
     _fallbackSpnegoLoginService.start();
     super.doStart();
@@ -196,6 +200,7 @@ public class TrustedProxyLoginService extends ContainerLifeCycle implements Logi
     _fallbackSpnegoLoginService.stop();
     _delegateSpnegoLoginService.stop();
     _userStore.stop();
+    _serviceUserStore.stop();
   }
 
   private UserIdentity getUserIdentity(Request request, String name) {
@@ -229,7 +234,7 @@ public class TrustedProxyLoginService extends ContainerLifeCycle implements Logi
   }
 
   private void setTrustedProxyIpPattern(List<String> userNames, String trustedProxyIpPattern) {
-    userNames.forEach(u -> _userStore.addUser(u, SecurityUtils.NO_CREDENTIAL, new String[] { DefaultRoleSecurityProvider.ADMIN }));
+    userNames.forEach(u -> _serviceUserStore.addUser(u, SecurityUtils.NO_CREDENTIAL, new String[] { DefaultRoleSecurityProvider.ADMIN }));
     if (trustedProxyIpPattern != null) {
       _trustedProxyIpPattern = Pattern.compile(trustedProxyIpPattern);
     } else {
