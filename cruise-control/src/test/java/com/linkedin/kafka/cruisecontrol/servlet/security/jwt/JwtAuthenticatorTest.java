@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.replay;
@@ -195,8 +194,9 @@ public class JwtAuthenticatorTest {
     expect(request.getAttribute(Request.COOKIE_ATTRIBUTE)).andReturn(List.of(jwtCookie)).anyTimes();
 
     Response response = mock(Response.class);
-    response.setStatus(HttpStatus.UNAUTHORIZED_401);
-    expectLastCall().andVoid();
+    PowerMock.mockStatic(Response.class);
+    Response.writeError(request, response, null, HttpStatus.UNAUTHORIZED_401);
+    PowerMock.expectLastCall().andVoid();
 
     replay(configuration, request, headers, response);
     JwtAuthenticator authenticator = new JwtAuthenticator(TOKEN_PROVIDER, JWT_TOKEN);
@@ -233,8 +233,9 @@ public class JwtAuthenticatorTest {
     expect(request.getAttribute(Request.COOKIE_ATTRIBUTE)).andReturn(List.of(jwtCookie)).anyTimes();
 
     Response response = mock(Response.class);
-    response.setStatus(HttpStatus.UNAUTHORIZED_401);
-    expectLastCall().andVoid();
+    PowerMock.mockStatic(Response.class);
+    Response.writeError(request, response, null, HttpStatus.UNAUTHORIZED_401);
+    PowerMock.expectLastCall().andVoid();
 
     replay(configuration, request, headers, response);
     JwtAuthenticator authenticator = new JwtAuthenticator(TOKEN_PROVIDER, JWT_TOKEN);

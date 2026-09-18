@@ -7,7 +7,6 @@ package com.linkedin.kafka.cruisecontrol.servlet.security;
 import org.eclipse.jetty.security.DefaultIdentityService;
 import org.eclipse.jetty.security.IdentityService;
 import org.eclipse.jetty.security.LoginService;
-import org.eclipse.jetty.security.SPNEGOUserPrincipal;
 import org.eclipse.jetty.security.UserIdentity;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Session;
@@ -52,16 +51,14 @@ public class DummyLoginService implements LoginService {
 
     @Override
     public UserIdentity getUserIdentity(Subject subject, Principal userPrincipal, boolean create) {
-        return createUserIdentity(userPrincipal.getName());
+        return createUserIdentity(userPrincipal);
     }
 
-    private UserIdentity createUserIdentity(String username) {
-        Principal userPrincipal = new SPNEGOUserPrincipal(username, "");
-        Subject subject = new Subject();
-        subject.getPrincipals().add(userPrincipal);
-        subject.getPrivateCredentials().add(NO_CREDENTIAL);
-        subject.setReadOnly();
-
-        return _identityService.newUserIdentity(subject, userPrincipal, new String[0]);
+    private UserIdentity createUserIdentity(Principal userPrincipal) {
+        Subject userSubject = new Subject();
+        userSubject.getPrincipals().add(userPrincipal);
+        userSubject.getPrivateCredentials().add(NO_CREDENTIAL);
+        userSubject.setReadOnly();
+        return _identityService.newUserIdentity(userSubject, userPrincipal, new String[0]);
     }
 }

@@ -110,7 +110,7 @@ public class JwtAuthenticator extends LoginAuthenticator {
         request.setAttribute(JWT_TOKEN_REQUEST_ATTRIBUTE, serializedJWT);
         UserIdentity identity = login(userName, jwtToken, request, response);
         if (identity == null) {
-          response.setStatus(HttpStatus.UNAUTHORIZED_401);
+          Response.writeError(request, response, callback, HttpStatus.UNAUTHORIZED_401);
           return AuthenticationState.SEND_FAILURE;
         } else {
           return new UserAuthenticationSucceeded(getAuthenticationType(), identity);
