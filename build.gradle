@@ -185,6 +185,7 @@ project(':cruise-control-core') {
 
   dependencies {
     configurations.all {
+      exclude group: 'org.apache.logging.log4j', module: 'log4j-slf4j-impl'
       exclude group: 'org.slf4j', module: 'slf4j-log4j12'
       exclude group: 'log4j', module: 'log4j'
       exclude group: 'ch.qos.logback'
@@ -284,6 +285,7 @@ project(':cruise-control') {
 
   dependencies {
     configurations.all {
+      exclude group: 'org.apache.logging.log4j', module: 'log4j-slf4j-impl'
       exclude group: 'org.slf4j', module: 'slf4j-log4j12'
       exclude group: 'log4j', module: 'log4j'
       exclude group: 'ch.qos.logback'
@@ -467,6 +469,7 @@ project(':cruise-control-metrics-reporter') {
 
   dependencies {
     configurations.all {
+      exclude group: 'org.apache.logging.log4j', module: 'log4j-slf4j-impl'
       exclude group: 'org.slf4j', module: 'slf4j-log4j12'
       exclude group: 'log4j', module: 'log4j'
       exclude group: 'ch.qos.logback'
