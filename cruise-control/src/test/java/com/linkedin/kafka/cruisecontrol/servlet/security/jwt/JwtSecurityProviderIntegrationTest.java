@@ -33,6 +33,7 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -112,7 +113,7 @@ public class JwtSecurityProviderIntegrationTest extends CruiseControlIntegration
   public JwtSecurityProviderIntegrationTest() throws Exception {
     _tokenAndKeys = TokenGenerator.generateToken(TEST_USERNAME);
     _publicKeyFile = createCertificate(_tokenAndKeys);
-    _tokenProviderServer = new Server(0);
+    _tokenProviderServer = new Server(new InetSocketAddress("127.0.0.1", 0));
     _tokenProviderServer.setHandler(new TestAuthenticatorHandler());
   }
 
